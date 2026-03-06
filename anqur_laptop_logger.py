@@ -5,28 +5,57 @@ import re
 from datetime import datetime
 
 # ==========================================
-# CONFIGURATION: LAPTOP 2 (RECEIVER C)
+# HARDWARE CONFIGURATION
 # ==========================================
-PORT = '/dev/ttyACM1' 
+PORT = '/dev/ttyACM1'  # <--- NOTE: Change this to /dev/ttyACM1 on Anqur's laptop!
 BAUD = 115200
 DURATION = 60  # Set to 30 * 60 for the real run
 
-# 1. Define THIS Receiver's Identity
-RECEIVER_NODE = 'Node_C'
-RECEIVER_MAC = 'A6:66:F7:7F:8F:C7:AC:A4'  
-
-# 2. Map Sender MACs to Node Names
-KNOWN_SENDERS = {
-    'AE:F7:83:9A:A9:52:C5:CD': 'Node_A',  
-    '66:3D:FF:91:0C:09:14:A5': 'Node_B'   
+# The Master Dictionary of your hardware
+MASTER_MACS = {
+    'A': 'AE:F7:83:9A:A9:52:C5:CD',
+    'B': '66:3D:FF:91:0C:09:14:A5',
+    'C': 'A6:66:F7:7F:8F:C7:AC:A4'
 }
 
+def setup_receiver_identity():
+    """Prompts the user to identify the current receiver node."""
+    print("\n" + "="*45)
+    print("   📡 IoT Data Logger - Receiver Setup")
+    print("="*45)
+    
+    while True:
+        choice = input("Which Node is THIS laptop connected to? (A, B, or C): ").strip().upper()
+        
+        # Make it foolproof: handle if you accidentally type "node a" instead of "a"
+        if choice.startswith("NODE "):
+            choice = choice.replace("NODE ", "").strip()
+            
+        if choice in MASTER_MACS:
+            receiver_node = f"Node_{choice}"
+            receiver_mac = MASTER_MACS[choice]
+            
+            # Automatically create the known senders list (everyone EXCEPT this receiver)
+            known_senders = {
+                mac: f"Node_{letter}" 
+                for letter, mac in MASTER_MACS.items() 
+                if letter != choice
+            }
+            
+            print(f"\n✅ Successfully configured as {receiver_node} ({receiver_mac})")
+            return receiver_node, receiver_mac, known_senders
+        else:
+            print("❌ Invalid input. Please type A, B, or C.")
+
 def main():
+    # 1. Run the interactive setup prompt
+    RECEIVER_NODE, RECEIVER_MAC, KNOWN_SENDERS = setup_receiver_identity()
+    
+    # 2. Start the data collection
     try:
         ser = serial.Serial(PORT, BAUD, timeout=1)
         print(f"Listening on {PORT}...")
-        print(f"I am {RECEIVER_NODE} ({RECEIVER_MAC})")
-        print("⏳ Waiting for the first packet to create log files...\n")
+        print("⏳ Waiting for the first packet from a Sender to create log files...\n")
         
         raw_buffer = []  
         f_csv = None
