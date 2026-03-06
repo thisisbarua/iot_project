@@ -1,0 +1,26 @@
+# =========================
+# IoT Project Data Files
+# =========================
+
+# Ignore all parsed data tables
+*.csv
+
+# Ignore all raw terminal dumps
+*.log
+
+# Ignore LibreOffice / Excel temporary lock files
+.~lock.*
+*.csv#
+
+# =========================
+# Python & OS Junk (Highly Recommended)
+# =========================
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS system files
+.DS_Store
+Thumbs.db
