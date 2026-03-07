@@ -9,7 +9,7 @@ from datetime import datetime
 # ==========================================
 PORT = '/dev/ttyACM0'  # <--- NOTE: Change this to /dev/ttyACM1 on Anqur's laptop!
 BAUD = 115200
-DURATION = 60  # Set to 30 * 60 for the real run
+DURATION = 15 * 60  # 15 min
 
 # The Master Dictionary of your hardware
 MASTER_MACS = {
