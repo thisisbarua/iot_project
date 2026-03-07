@@ -5,10 +5,11 @@
 #include "net/ipv6/addr.h"
 #include "periph/gpio.h"
 
-// --- NEW HEADERS REQUIRED FOR TX POWER OVERRIDE ---
+// --- NETWORK HEADERS REQUIRED FOR TX POWER OVERRIDE ---
 #include "net/gnrc/netif.h"
+#include "net/gnrc/netapi.h"
 #include "net/netopt.h"
-// --------------------------------------------------
+// ------------------------------------------------------
 
 #define INTERVAL (100000U) // 100ms = 10 packets/second
 #define PORT     (8888)
@@ -30,11 +31,14 @@ int main(void)
     gpio_init(LED0_PIN, GPIO_OUT);
 
     // --- NEW: FORCE MAXIMUM TX POWER (+8 dBm) ---
-    // Iterate through network interfaces (usually just one radio)
+    // Iterate through network interfaces to find the radio
     gnrc_netif_t *netif = gnrc_netif_iter(NULL);
     if (netif != NULL) {
-        int16_t tx_power = 8; // +8 dBm is the max for nRF52840
-        gnrc_netif_set(netif, NETOPT_TX_POWER, 0, &tx_power, sizeof(tx_power));
+        int16_t tx_power = 8; // +8 dBm is the max hardware limit for nRF52840
+        
+        // Push the configuration directly to the interface's Process ID
+        gnrc_netapi_set(netif->pid, NETOPT_TX_POWER, 0, &tx_power, sizeof(tx_power));
+        
         puts("SYSTEM: Radio locked to MAX TX Power (+8 dBm)");
     }
     // --------------------------------------------
