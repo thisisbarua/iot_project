@@ -1,36 +1,62 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+import os
 
-# Config per PDF
-WINDOW_SIZE = 100 # 10s of data [cite: 209]
-STEP_SIZE = 10    # 90% overlap for MASSIVE training data augmentation
+# ==========================================
+# CONFIGURATION (Strictly following PDF Page 3)
+# ==========================================
+INPUT_FILE = "ULTIMATE_MASTER_DATASET.csv"
+WINDOW_SIZE = 100  # Samples for 10s of data [cite: 69]
+STEP_SIZE = 50     # For exactly 50% overlap 
+FEATURES = ['RSSI', 'LQI', 'Diff_RSSI'] # Required inputs [cite: 50, 61]
 
-df = pd.read_csv("ULTIMATE_MASTER_DATASET.csv")
+def main():
+    print(f"📥 Loading '{INPUT_FILE}'...")
+    df = pd.read_csv(INPUT_FILE)
+    
+    # 1. Differentiation: y_i = x_{i+1} - x_i [cite: 62]
+    # This is already present in your Master files, but we ensure it's calculated
+    if 'Diff_RSSI' not in df.columns:
+        print("⚙️  Computing Differentiation...")
+        df['Diff_RSSI'] = df.groupby(['Environment', 'Sender_Node'])['RSSI'].diff().fillna(0)
+    
+    # 2. Normalization: z_i = (y_i - y_min) / (y_max - y_min) [cite: 66]
+    # We apply this to the raw and differentiated columns globally
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    df[FEATURES] = scaler.fit_transform(df[FEATURES])
+    
+    print("⏳ Sorting data by time...")
+    df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+    df = df.sort_values(by=['Environment', 'Sender_Node', 'Timestamp'])
 
-# 1. Differentiation (Requirement: Page 3) [cite: 202]
-df['Diff_RSSI'] = df.groupby(['Environment', 'Sender_Node'])['RSSI'].diff().fillna(0)
-df['Diff_LQI'] = df.groupby(['Environment', 'Sender_Node'])['LQI'].diff().fillna(0)
+    X_list, y_env_list, y_node_list = [], [], []
 
-# 2. Normalization (Formula: z_i = (y_i - y_min) / (y_max - y_min)) 
-scaler = MinMaxScaler()
-cols_to_scale = ['RSSI', 'LQI', 'Diff_RSSI', 'Diff_LQI']
-df[cols_to_scale] = scaler.fit_transform(df[cols_to_scale])
+    # 3. Segmentation: Overlapping frames [cite: 67]
+    print(f"🪟 Slicing into {STEP_SIZE}-step windows (50% overlap)...")
+    grouped = df.groupby(['Environment', 'Sender_Node'])
+    
+    for name, group in grouped:
+        feats = group[FEATURES].values
+        env_label = group['Environment'].iloc[0]
+        node_label = group['Sender_Node'].iloc[0]
+        
+        for i in range(0, len(feats) - WINDOW_SIZE + 1, STEP_SIZE):
+            window = feats[i : i + WINDOW_SIZE]
+            X_list.append(window)
+            y_env_list.append(env_label)
+            y_node_list.append(node_label)
 
-# 3. Windowing [cite: 207]
-X_list, y_env_list, y_node_list = [], [], []
-grouped = df.groupby(['Environment', 'Sender_Node'])
+    X = np.array(X_list)
+    y_env = np.array(y_env_list)
+    y_node = np.array(y_node_list)
 
-for name, group in grouped:
-    feats = group[cols_to_scale].values
-    env = group['Environment'].iloc[0]
-    node = group['Sender_Node'].iloc[0]
-    for i in range(0, len(feats) - WINDOW_SIZE, STEP_SIZE):
-        X_list.append(feats[i:i+WINDOW_SIZE])
-        y_env_list.append(env)
-        y_node_list.append(node)
+    print(f"✅ Created {len(X)} rubric-compliant windows.")
+    
+    os.makedirs("processed_data", exist_ok=True)
+    np.save("processed_data/X_windows.npy", X)
+    np.save("processed_data/y_env_labels.npy", y_env)
+    np.save("processed_data/y_node_labels.npy", y_node)
 
-np.save("processed_data/X_windows.npy", np.array(X_list))
-np.save("processed_data/y_env_labels.npy", np.array(y_env_list))
-np.save("processed_data/y_node_labels.npy", np.array(y_node_list))
-print(f"🚀 Prepared {len(X_list)} windows with 4 channels of information!")
+if __name__ == "__main__":
+    main()
