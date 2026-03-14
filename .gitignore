@@ -3,7 +3,7 @@
 # =========================
 
 # Ignore all parsed data tables
-*.csv
+# *.csv
 
 # Ignore all raw terminal dumps
 *.log
