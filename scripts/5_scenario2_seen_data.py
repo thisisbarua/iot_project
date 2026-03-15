@@ -3,8 +3,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dense, Dropout, SpatialDropout1D, BatchNormalization, Add, Activation, GlobalAveragePooling1D, GaussianNoise
-from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
+from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dense, Dropout, SpatialDropout1D, BatchNormalization, Add, Activation, GlobalAveragePooling1D, GaussianNoise, Concatenate
 from tensorflow.keras.regularizers import l2
 
 # ==========================================
@@ -30,43 +29,63 @@ X_train, X_test, y_train, y_test = train_test_split(
 print(f"📐 Train: {X_train.shape[0]} | Test: {X_test.shape[0]}")
 
 # ==========================================
-# 2. SEQUENCE-REGULARIZED RF-FINGERPRINTING CNN
+# 2. MULTI-SCALE INCEPTION-STYLE CNN
 # ==========================================
-def build_regularized_cnn(input_shape, num_classes):
-    # L2 constraint increased to 5e-4 to combat 91% train vs 66% val overfitting
+def build_multiscale_cnn(input_shape, num_classes):
     reg = l2(5e-4) 
+    inputs = Input(shape=input_shape)
+    x = GaussianNoise(0.05)(inputs)
     
-    model = Sequential([
-        Input(shape=input_shape),
-        # Increased noise injection to force ignoring environmental artifacts
-        GaussianNoise(0.05), 
-        
-        Conv1D(filters=64, kernel_size=7, padding='same', kernel_regularizer=reg),
-        BatchNormalization(),
-        Activation('relu'),
-        MaxPooling1D(pool_size=2),
-        SpatialDropout1D(0.2), # Drops entire 1D feature maps to prevent sequence co-adaptation
-        
-        Conv1D(filters=128, kernel_size=5, padding='same', kernel_regularizer=reg),
-        BatchNormalization(),
-        Activation('relu'),
-        MaxPooling1D(pool_size=2),
-        SpatialDropout1D(0.2),
-        
-        Conv1D(filters=256, kernel_size=3, padding='same', kernel_regularizer=reg),
-        BatchNormalization(),
-        Activation('relu'),
-        GlobalAveragePooling1D(),
-        
-        Dense(128, activation='relu', kernel_regularizer=reg),
-        Dropout(0.5), # Standard dropout for dense layers
-        Dense(num_classes, activation='softmax')
-    ])
+    # PATHWAY 1: High-Frequency (Micro-jitters) - Kernel = 3
+    p1 = Conv1D(filters=32, kernel_size=3, padding='same', kernel_regularizer=reg)(x)
+    p1 = BatchNormalization()(p1)
+    p1 = Activation('relu')(p1)
+    p1 = Conv1D(filters=64, kernel_size=3, padding='same', kernel_regularizer=reg)(p1)
+    p1 = BatchNormalization()(p1)
+    p1 = Activation('relu')(p1)
+    p1 = MaxPooling1D(pool_size=2)(p1)
+    p1 = SpatialDropout1D(0.2)(p1)
+
+    # PATHWAY 2: Mid-Frequency - Kernel = 5
+    p2 = Conv1D(filters=32, kernel_size=5, padding='same', kernel_regularizer=reg)(x)
+    p2 = BatchNormalization()(p2)
+    p2 = Activation('relu')(p2)
+    p2 = Conv1D(filters=64, kernel_size=5, padding='same', kernel_regularizer=reg)(p2)
+    p2 = BatchNormalization()(p2)
+    p2 = Activation('relu')(p2)
+    p2 = MaxPooling1D(pool_size=2)(p2)
+    p2 = SpatialDropout1D(0.2)(p2)
+
+    # PATHWAY 3: Low-Frequency (Long carrier wave slopes) - Kernel = 11
+    p3 = Conv1D(filters=32, kernel_size=11, padding='same', kernel_regularizer=reg)(x)
+    p3 = BatchNormalization()(p3)
+    p3 = Activation('relu')(p3)
+    p3 = Conv1D(filters=64, kernel_size=11, padding='same', kernel_regularizer=reg)(p3)
+    p3 = BatchNormalization()(p3)
+    p3 = Activation('relu')(p3)
+    p3 = MaxPooling1D(pool_size=2)(p3)
+    p3 = SpatialDropout1D(0.2)(p3)
+
+    # SYNTHESIS: Combine all 3 spatial scales
+    merged = Concatenate()([p1, p2, p3])
+    
+    # Deep Integration Block
+    merged = Conv1D(filters=256, kernel_size=3, padding='same', kernel_regularizer=reg)(merged)
+    merged = BatchNormalization()(merged)
+    merged = Activation('relu')(merged)
+    merged = GlobalAveragePooling1D()(merged)
+    
+    # Final Classification
+    dense = Dense(128, activation='relu', kernel_regularizer=reg)(merged)
+    dense = Dropout(0.5)(dense)
+    outputs = Dense(num_classes, activation='softmax')(dense)
+    
+    model = Model(inputs=inputs, outputs=outputs)
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
 # ==========================================
-# 3. SEQUENCE-REGULARIZED RESNET
+# 3. SINGLE-SCALE RESNET (Baseline Comparison)
 # ==========================================
 def build_regularized_resnet(input_shape, num_classes):
     reg = l2(5e-4)
@@ -116,12 +135,12 @@ input_shape = (X_train.shape[1], X_train.shape[2])
 
 # Mechanics: Reduce LR to find fine minima, and EarlyStopping to prevent memorization
 def get_callbacks():
-    reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=7, min_lr=0.00001, verbose=1)
+    reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=0.00001, verbose=1)
     early_stop = EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True, verbose=1)
     return [reduce_lr, early_stop]
 
-print("\n🧠 TRAINING CNN (SCENARIO II - SEEN DATA - SEQUENCE REGULARIZED)...")
-cnn = build_regularized_cnn(input_shape, num_classes)
+print("\n🧠 TRAINING MULTI-SCALE CNN (SCENARIO II - SEEN DATA)...")
+cnn = build_multiscale_cnn(input_shape, num_classes)
 cnn.fit(X_train, y_train, epochs=80, batch_size=64, validation_split=0.1, 
         callbacks=get_callbacks(), verbose=1)
 
