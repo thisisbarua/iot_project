@@ -17,11 +17,11 @@ These scripts run on the laptop connected to the "Receiver" node (Sniffer) via U
 
 ### 3. Machine Learning & Processing (Python)
 Once data is collected from different environments, it is processed and fed into neural networks.
-- **`scripts/1_prepare_time_series.py`**: Takes the `ULTIMATE_MASTER_DATASET.csv`, computes differential RSSI, normalizes all features via MinMax scaling, and slices the data into overlapping 100-sample time windows (approx. 10 seconds of data). Outputs `.npy` array files into a `processed_data/` folder.
+- **`scripts/1_prepare_time_series.py`**: Takes the `ULTIMATE_MASTER_DATASET.csv`, computes differential RSSI, normalizes all features via MinMax scaling, and slices the data into overlapping time windows with 50% overlap. Outputs `.npy` array files into a `processed_data/` folder.
 - **`scripts/2_scenario1_seen_data.py`**: **Scenario I, Strategy 1 (Seen Data)** — Loads the preprocessed windows and trains two deep learning models (1D CNN and Deep Multi-Block ResNet) to classify **environments**. Uses a random 75/25 train/test split, so the models see data from all nodes and environments during training.
 - **`scripts/3_scenario1_unseen_data.py`**: **Scenario I, Strategy 2 (Unseen Data)** — Same environment classification task, but splits by **sensor node**: trains on Node_A + Node_B data, tests on Node_C data (completely unseen). Tests whether environment signatures generalize across different hardware.
-- **`scripts/4_prepare_scenario2.py`**: Alternative data preparation for **Scenario II**. To prevent the network from memorizing the environment, it uses **Zero-Mean Centering** per 100-step window instead of global MinMaxScaler. This destroys absolute signal strength but preserves the high-frequency hardware variance needed for node fingerprinting.
-- **`scripts/5_scenario2_seen_data.py`**: **Scenario II (Node Classification)** — Uses the Zero-Mean centered data to classify which specific hardware node generated the signal. Implements a State-of-the-Art **Multi-Scale (Inception-style) 1D CNN** with parallel pathways (kernels 3, 5, 11) to capture micro-jitters and long-time carrier wave drifts. Uses heavy regularization (`SpatialDropout1D`, `GaussianNoise`, `L2`) to prevent environment memorization.
+- **`scripts/4_prepare_scenario2.py`**: Alternative data preparation for **Scenario II**. To prevent the network from memorizing the environment, it uses **Zero-Mean Centering** per 250-step window instead of global MinMaxScaler. This destroys absolute signal strength but preserves the high-frequency hardware variance needed for node fingerprinting.
+- **`scripts/5_scenario2_seen_data.py`**: **Scenario II (Node Classification)** — Uses the Zero-Mean centered data to classify which specific hardware node generated the signal. Implements a State-of-the-Art **Multi-Scale (Inception-style) 1D CNN** and a **Multi-Scale Inception-ResNet** with parallel pathways (kernels 3, 5, 11) to capture micro-jitters and long-time carrier wave drifts. Uses heavy regularization (`SpatialDropout1D`, `GaussianNoise`, `L2`) to prevent environment memorization.
 
 ### 4. Datasets
 - **`five_env_data/`**: Contains the master CSVs recorded for five distinct environments: *Bridge*, *Forest*, *Lake*, *Open Field*, and *River*.
@@ -118,8 +118,8 @@ python3 3_scenario1_unseen_data.py
 The `4_prepare_scenario2.py` script radically changes the preprocessing strategy since identifying identical hardware nodes is much harder than identifying environments.
 
 **What it does:**
-- Identical window slicing to Step 1 (100 samples, 50% overlap).
-- **Core Difference:** Replaces Global MinMax Scaling with **Per-Window Zero-Mean Centering**. It subtracts the mean of *each individual 100-step window* from itself. 
+- Sliding window segmentation with **250 samples** per window and a step size of 50.
+- **Core Difference:** Replaces Global MinMax Scaling with **Per-Window Zero-Mean Centering**. It subtracts the mean of *each individual 250-step window* from itself. 
 - *Why?* Global scaling preserves the absolute signal strength (which is a massive hint about the environment). Zero-Mean Centering destroys the absolute strength, forcing the network to look purely at the localized, high-frequency "shape" and variance of the signal—which contains the unique RF hardware fingerprint of the transmitter chip.
 
 **How to run:**
@@ -140,7 +140,7 @@ The `5_scenario2_seen_data.py` script attempts to identify whether the signal ca
   - Pathway 2 (`kernel=5`): Finds mid-level patterns.
   - Pathway 3 (`kernel=11`): Finds long-term slopes in the transmitter's carrier wave.
   These pathways are concatenated together into a thick fingerprint vector before classification.
-- **Sequence-Regularized ResNet-1D:** A deep residual baseline heavily modified to prevent rapid overfitting.
+- **Multi-Scale Inception-ResNet:** A deep residual network with the same multi-scale entry block (kernels 3, 5, 11), followed by two residual blocks with skip connections. Combines the Inception-style multi-scale feature extraction with deep residual learning for superior accuracy.
 
 **Anti-Environment Memorization Defenses:**
 To stop the model from simply memorizing the environmental background noise instead of the hardware, both models employ:
@@ -152,6 +152,8 @@ To stop the model from simply memorizing the environmental background noise inst
 ```bash
 python3 5_scenario2_seen_data.py
 ```
+
+**Expected Output:** By increasing the sliding window size to 250 (in Step 4) and lowering the batch size to 32, the **Multi-Scale CNN** achieves ~93.9% accuracy and the **Inception-ResNet** achieves a monumental **~95.5%** accuracy.
 
 ---
 

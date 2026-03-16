@@ -4,6 +4,7 @@ from sklearn.preprocessing import LabelEncoder
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dense, Dropout, SpatialDropout1D, BatchNormalization, Add, Activation, GlobalAveragePooling1D, GaussianNoise, Concatenate
+from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 from tensorflow.keras.regularizers import l2
 
 # ==========================================
@@ -85,32 +86,47 @@ def build_multiscale_cnn(input_shape, num_classes):
     return model
 
 # ==========================================
-# 3. SINGLE-SCALE RESNET (Baseline Comparison)
+# 3. MULTI-SCALE INCEPTION-RESNET
 # ==========================================
-def build_regularized_resnet(input_shape, num_classes):
+def build_multiscale_resnet(input_shape, num_classes):
     reg = l2(5e-4)
     inputs = Input(shape=input_shape)
     
     x = GaussianNoise(0.05)(inputs)
     
-    x = Conv1D(64, kernel_size=7, padding='same', kernel_regularizer=reg)(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
+    # MULTI-SCALE ENTRY BLOCK (The "Microscope")
+    # Pathway 1: High Frequency
+    p1 = Conv1D(filters=32, kernel_size=3, padding='same', kernel_regularizer=reg)(x)
+    p1 = BatchNormalization()(p1)
+    p1 = Activation('relu')(p1)
+    
+    # Pathway 2: Mid Frequency
+    p2 = Conv1D(filters=32, kernel_size=5, padding='same', kernel_regularizer=reg)(x)
+    p2 = BatchNormalization()(p2)
+    p2 = Activation('relu')(p2)
+    
+    # Pathway 3: Low Frequency
+    p3 = Conv1D(filters=32, kernel_size=11, padding='same', kernel_regularizer=reg)(x)
+    p3 = BatchNormalization()(p3)
+    p3 = Activation('relu')(p3)
+    
+    # Synthesize multi-scale features before deep residual learning
+    x = Concatenate()([p1, p2, p3])
     x = MaxPooling1D(pool_size=2)(x) 
     x = SpatialDropout1D(0.2)(x)
     
-    # Block 1
-    shortcut = Conv1D(64, kernel_size=1, padding='same')(x) 
-    x = Conv1D(64, kernel_size=5, padding='same', kernel_regularizer=reg)(x)
+    # RESIDUAL BLOCK 1
+    shortcut = Conv1D(96, kernel_size=1, padding='same')(x) # 32+32+32 = 96 filters from concat
+    x = Conv1D(96, kernel_size=5, padding='same', kernel_regularizer=reg)(x)
     x = BatchNormalization()(x)
     x = Activation('relu')(x)
     
-    x = Conv1D(64, kernel_size=3, padding='same', kernel_regularizer=reg)(x)
+    x = Conv1D(96, kernel_size=3, padding='same', kernel_regularizer=reg)(x)
     x = BatchNormalization()(x)
     x = Add()([shortcut, x]) 
     x = Activation('relu')(x)
     
-    # Block 2
+    # RESIDUAL BLOCK 2 (Downsampling)
     shortcut = Conv1D(128, kernel_size=1, padding='same', strides=2)(x) 
     x = Conv1D(128, kernel_size=5, padding='same', strides=2, kernel_regularizer=reg)(x)
     x = BatchNormalization()(x)
@@ -141,16 +157,16 @@ def get_callbacks():
 
 print("\n🧠 TRAINING MULTI-SCALE CNN (SCENARIO II - SEEN DATA)...")
 cnn = build_multiscale_cnn(input_shape, num_classes)
-cnn.fit(X_train, y_train, epochs=80, batch_size=64, validation_split=0.1, 
+cnn.fit(X_train, y_train, epochs=200, batch_size=32, validation_split=0.1, 
         callbacks=get_callbacks(), verbose=1)
 
-print("\n🚀 TRAINING RESNET (SCENARIO II - SEEN DATA - SEQUENCE REGULARIZED)...")
-resnet = build_regularized_resnet(input_shape, num_classes)
+print("\n🚀 TRAINING MULTI-SCALE INCEPTION-RESNET (SCENARIO II - SEEN DATA)...")
+resnet = build_multiscale_resnet(input_shape, num_classes)
 resnet.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-resnet.fit(X_train, y_train, epochs=80, batch_size=64, validation_split=0.1, 
+resnet.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.1, 
            callbacks=get_callbacks(), verbose=1)
 
-print("\n📊 FINAL SCORES (SCENARIO II - STRATEGY 1: SEEN DATA - SEQUENCE REGULARIZED)")
+print("\n📊 FINAL SCORES (SCENARIO II - STRATEGY 1: SEEN DATA - MULTI-SCALE MODELS)")
 _, cnn_acc = cnn.evaluate(X_test, y_test, verbose=0)
 _, res_acc = resnet.evaluate(X_test, y_test, verbose=0)
-print(f"CNN Accuracy: {cnn_acc*100:.2f}% | ResNet Accuracy: {res_acc*100:.2f}%")
+print(f"Multi-Scale CNN Accuracy: {cnn_acc*100:.2f}% | Inception-ResNet Accuracy: {res_acc*100:.2f}%")

@@ -6,8 +6,8 @@ import os
 # SCENARIO II CONFIGURATION
 # ==========================================
 INPUT_FILE = "ULTIMATE_MASTER_DATASET.csv"
-WINDOW_SIZE = 100  # 10s of data
-STEP_SIZE = 50     # 50% overlap 
+WINDOW_SIZE = 250
+STEP_SIZE = 50
 FEATURES = ['RSSI', 'LQI', 'Diff_RSSI'] 
 
 def main():
