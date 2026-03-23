@@ -1,5 +1,4 @@
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
@@ -9,26 +8,70 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau
 # ==========================================
 # 1. LOAD THE SCENARIO 2 CUSTOM DATA
 # ==========================================
-print("📥 Loading zero-mean centered data for SCENARIO II (Seen Data)...")
+print("📥 Loading zero-mean centered data for SCENARIO II...")
 X = np.load("processed_data/X_windows_scen2.npy")
+y_node = np.load("processed_data/y_node_labels_scen2.npy")
+y_env = np.load("processed_data/y_env_labels_scen2.npy") 
 
-# 🎯 Target is the Nodes
-y_target = np.load("processed_data/y_node_labels_scen2.npy")
+# ==========================================
+# ENVIRONMENT-INVARIANT TRANSFORMS (applied at runtime, file 4 untouched)
+# ==========================================
+# Step A: Z-Score Standardization — normalizes variance per window.
+# The data is already zero-mean centered (from file 4), so dividing by std
+# removes the environment-dependent signal spread (e.g., forest=high variance,
+# open_field=low variance), leaving only the hardware jitter pattern.
+print("⚙️  Applying Per-Window Z-Score Standardization...")
+window_std = X.std(axis=1, keepdims=True) + 1e-8
+X = X / window_std
 
-print(f"📐 Data Shape: {X.shape}") # Expecting (Samples, 250, 3)
+# Step B: Keep ONLY differential features (columns 2=Diff_RSSI, 3=Diff_LQI).
+# Raw RSSI and LQI still carry environment-specific absolute patterns even after
+# centering. Differentials (sample-to-sample change) are inherently more
+# hardware-specific since they capture rapid micro-jitter from the transmitter chip.
+print("⚙️  Slicing to differential-only features: [Diff_RSSI, Diff_LQI]")
+X = X[:, :, [2, 3]]
+print(f"📐 Final Data Shape: {X.shape}")
 
+# 🎯 Target is the Node!
 encoder = LabelEncoder()
-y_encoded = encoder.fit_transform(y_target)
+y_encoded = encoder.fit_transform(y_node)
 y_categorical = tf.keras.utils.to_categorical(y_encoded)
 num_classes = len(encoder.classes_)
 
-# Split 75/25 [cite: 56]
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y_categorical, test_size=0.25, random_state=42
-)
+# ==========================================
+# 2. THE "UNSEEN ENVIRONMENT" SPLIT 
+# ==========================================
+unique_envs = np.unique(y_env)
+print(f"🌲 Found environments: {unique_envs}")
+
+# THE FIX: Explicitly target the lowercase 'lake' to match your dataset perfectly
+unseen_test_env = 'lake' 
+
+print(f"🏋️ Training hardware signatures on everything EXCEPT the {unseen_test_env}...")
+print(f"🧪 Testing hardware identification strictly in the UNSEEN {unseen_test_env}...")
+
+# Create masks to isolate the lake
+test_mask = y_env == unseen_test_env
+train_mask = y_env != unseen_test_env
+
+X_train_raw = X[train_mask]
+y_train_raw = y_categorical[train_mask]
+X_test = X[test_mask]
+y_test = y_categorical[test_mask]
 
 # ==========================================
-# 2. HEAVY-DUTY CNN
+# THE SHUFFLE FIX
+# ==========================================
+# Mix the nodes and environments so validation_split gets a healthy random sample!
+indices = np.arange(len(X_train_raw))
+np.random.shuffle(indices)
+X_train = X_train_raw[indices]
+y_train = y_train_raw[indices]
+
+print(f"📐 Train Shape: {X_train.shape} | Test Shape: {X_test.shape}")
+
+# ==========================================
+# 3. HEAVY-DUTY CNN
 # ==========================================
 def build_cnn(input_shape, num_classes):
     model = Sequential([
@@ -56,7 +99,7 @@ def build_cnn(input_shape, num_classes):
     return model
 
 # ==========================================
-# 3. DEEP MULTI-BLOCK RESNET
+# 4. DEEP MULTI-BLOCK RESNET 
 # ==========================================
 def build_resnet(input_shape, num_classes):
     inputs = Input(shape=input_shape)
@@ -93,21 +136,21 @@ def build_resnet(input_shape, num_classes):
     return Model(inputs, outputs)
 
 # ==========================================
-# 4. EXECUTION
+# 5. EXECUTION
 # ==========================================
 input_shape = (X_train.shape[1], X_train.shape[2])
 reduce_lr = lambda: ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=7, min_lr=0.00001, verbose=1)
 
-print("\n🧠 TRAINING CNN (SCENARIO II - NODE IDENTIFICATION)...")
+print("\n🧠 TRAINING CNN (UNSEEN ENV - NODE ID)...")
 cnn = build_cnn(input_shape, num_classes)
-cnn.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
+cnn.fit(X_train, y_train, epochs=80, batch_size=32, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
-print("\n🚀 TRAINING RESNET (SCENARIO II - NODE IDENTIFICATION)...")
+print("\n🚀 TRAINING RESNET (UNSEEN ENV - NODE ID)...")
 resnet = build_resnet(input_shape, num_classes)
 resnet.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-resnet.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
+resnet.fit(X_train, y_train, epochs=80, batch_size=32, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
-print("\n📊 FINAL SCORES (SCENARIO II - SEEN DATA)")
+print("\n📊 FINAL SCORES (SCENARIO II - STRATEGY 2: UNSEEN ENVIRONMENT)")
 _, cnn_acc = cnn.evaluate(X_test, y_test, verbose=0)
 _, res_acc = resnet.evaluate(X_test, y_test, verbose=0)
 print(f"CNN Node Accuracy: {cnn_acc*100:.2f}% | ResNet Node Accuracy: {res_acc*100:.2f}%")
