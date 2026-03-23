@@ -122,7 +122,18 @@ The `4_prepare_scenario2.py` script radically changes the preprocessing strategy
 - Sliding window segmentation with **1000 samples** per window and a step size of 485.
 - Uses **4 features**: RSSI, LQI, Diff_RSSI, Diff_LQI — the differential features capture rapid hardware-specific jitter patterns.
 - **Core Difference:** Replaces Global MinMax Scaling with **Per-Window Zero-Mean Centering**. It subtracts the mean of *each individual 1000-step window* from itself. 
-- *Why?* Global MinMax scaling (used in Step 1) preserves absolute signal levels — great for telling environments apart, but **harmful** for node classification. The same node transmitting in a Bridge (RSSI ≈ -60) vs a Forest (RSSI ≈ -85) would look like two completely different nodes. Zero-Mean Centering destroys the absolute strength, forcing the network to look purely at the localized, high-frequency "shape" and variance of the signal — which contains the unique RF hardware fingerprint of each transmitter chip.
+
+**Why NOT MinMax for Scenario II?**
+
+MinMax scaling normalizes the entire dataset to [0, 1] but **preserves the relative differences in absolute signal strength between environments**. This is catastrophic for node classification because:
+
+- **Node_A in Bridge** transmits at RSSI ≈ -60 dBm → MinMax maps this to ~0.8
+- **Node_A in Forest** transmits at RSSI ≈ -85 dBm → MinMax maps this to ~0.2
+- **Node_B in Bridge** transmits at RSSI ≈ -62 dBm → MinMax maps this to ~0.78
+
+Under MinMax, the model sees Node_A-in-Bridge (0.8) as **more similar to Node_B-in-Bridge (0.78)** than to **Node_A-in-Forest (0.2)** — even though A-Bridge and A-Forest come from the *same hardware*. The environment dominates the signal, drowning out the subtle hardware fingerprint. The model ends up classifying environments, not nodes.
+
+**Zero-Mean Centering fixes this** by subtracting each window's mean, collapsing all environments to fluctuate around zero. What remains is the high-frequency **shape** and **variance** of the signal — the unique RF imperfections caused by manufacturing tolerances in each transmitter chip. This is the true hardware fingerprint.
 
 > **Why two preprocessing scripts?** Scenario I needs the absolute signal level (environment = different RSSI). Scenario II needs it removed (same node = same fingerprint regardless of environment). These are fundamentally opposite requirements, hence `1_prepare_time_series.py` (MinMax) and `4_prepare_scenario2.py` (Zero-Mean Centering).
 
