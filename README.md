@@ -23,9 +23,11 @@ Once data is collected from different environments, it is processed and fed into
 - **`scripts/4_prepare_scenario2.py`**: Alternative data preparation for **Scenario II**. Computes both `Diff_RSSI` and `Diff_LQI`, then uses **Zero-Mean Centering** per 1000-step window instead of global MinMaxScaler. Uses all 4 features (RSSI, LQI, Diff_RSSI, Diff_LQI) with a step size of 485 to capture longer-duration RF hardware fingerprints.
 - **`scripts/5_scenario2_seen_data.py`**: **Scenario II (Node Classification)** — Uses the Zero-Mean centered data to classify which specific hardware node generated the signal. Implements a Heavy-Duty 1D CNN (128→256→512 filters) and a Deep Multi-Block ResNet with high dropout (0.7) for robust node identification.
 - **`scripts/6_scenario2_unseen_data.py`**: **Scenario II, Strategy 2 (Unseen Environment)** — The ultimate generalization test. Trains on 4 environments and tests node classification on the unseen `lake` environment. Applies additional runtime transforms (Per-Window Z-Score Standardization + differential-only feature slicing) to strip environment-specific patterns without modifying the shared preprocessed data from Step 4.
+
 ### 4. Datasets
-- **`five_env_data/`**: Contains the master CSVs recorded for five distinct environments: *Bridge*, *Forest*, *Lake*, *Open Field*, and *River*.
-- **`full_merged_data/`**: Contains `ULTIMATE_MASTER_DATASET.csv`, which merges the recordings from the environments to serve as the master input for the ML pipeline.
+- **`data/environment/`**: Contains the master CSVs recorded for each of the five distinct environments: `Bridge_Master.csv`, `Forest_Master.csv`, `Lake_Master.csv`, `Open_Field_Master.csv`, and `River_Master.csv`.
+- **`data/node/`**: Contains per-node CSVs aggregated across all environments: `Node_A.csv`, `Node_B.csv`, and `Node_C.csv`.
+- **`data/full_merged_data/`**: Contains `ULTIMATE_MASTER_DATASET.csv`, which merges all recordings from all environments and nodes to serve as the master input for the ML pipeline.
 
 ---
 
