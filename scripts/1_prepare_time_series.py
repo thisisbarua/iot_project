@@ -7,8 +7,8 @@ import os
 # CONFIGURATION (Strictly following PDF Page 3)
 # ==========================================
 INPUT_FILE = "ULTIMATE_MASTER_DATASET.csv"
-WINDOW_SIZE = 100  # Samples for 10s of data [cite: 69]
-STEP_SIZE = 50     # For exactly 50% overlap 
+WINDOW_SIZE = 220
+STEP_SIZE = 110     # For exactly 50% overlap 
 FEATURES = ['RSSI', 'LQI', 'Diff_RSSI'] # Required inputs [cite: 50, 61]
 
 def main():

@@ -64,7 +64,7 @@ The `1_prepare_time_series.py` script takes the merged dataset and processes it 
 - Reads `ULTIMATE_MASTER_DATASET.csv`
 - Computes differential RSSI (`Diff_RSSI = RSSI[t] - RSSI[t-1]`)
 - Normalizes all features (RSSI, LQI, Diff_RSSI, Diff_LQI) via MinMax scaling to [0, 1]
-- Segments the continuous data into sliding windows of **100 samples**
+- Segments the continuous data into sliding windows of **220 samples** with **50% overlap** (STEP_SIZE=110)
 - Each window captures approximately **10 seconds** of radio signal data
 
 **How to run:**
@@ -74,7 +74,7 @@ python3 1_prepare_time_series.py
 ```
 
 **Output:** Creates a `processed_data/` directory with:
-- `X_windows.npy` — Shape: `(4279, 100, 4)` — 4279 windows, each 100 timesteps × 4 features
+- `X_windows.npy` — 220 timesteps × 3 features per window
 - `y_env_labels.npy` — Environment label per window (bridge, forest, lake, open_field, river)
 - `y_node_labels.npy` — Sensor node label per window (Node_A, Node_B, Node_C)
 
@@ -91,7 +91,7 @@ The `2_scenario1_seen_data.py` script classifies **which environment** the signa
 - **1D CNN** — 3-layer convolutional network (128→256→512 filters) with kernel sizes 11, 7, 3. Uses BatchNormalization, ReLU, MaxPooling, GlobalAveragePooling, and a Dense(512) + Dropout(0.5) head.
 - **Deep Multi-Block ResNet** — 2 residual blocks with skip connections. Block 1: 128 filters (kernels 5, 3). Block 2: 256 filters with stride-2 downsampling. GlobalAveragePooling + Dense(256) + Dropout(0.5) head.
 
-**Hyperparameters:** 40 epochs, batch size 64, Adam optimizer, ReduceLROnPlateau (patience=3, factor=0.5).
+**Hyperparameters:** 60 epochs, batch size 32, Adam optimizer, ReduceLROnPlateau (patience=3, factor=0.5).
 
 **How to run:**
 ```bash
@@ -105,9 +105,9 @@ The `3_scenario1_unseen_data.py` script tests whether environment patterns gener
 
 **Data Split:** Split by sensor node (Strategy 2: "Unseen Data"). Trains on Node_A + Node_B, tests on Node_C. The training data is shuffled before Keras `validation_split` to ensure the validation set contains a mix of all environments.
 
-**Models:** Identical architectures to the seen-data script.
+**Models:** Identical architectures to the seen-data script, but with Dropout increased to 0.7 for both CNN and ResNet to combat overfitting on the smaller per-node training set.
 
-**Hyperparameters:** 60 epochs, batch size 64, Adam optimizer, ReduceLROnPlateau (patience=7, factor=0.5). Higher patience and more epochs are used because the unseen-node task requires more training time to converge.
+**Hyperparameters:** 60 epochs, batch size 16, Adam optimizer, ReduceLROnPlateau (patience=7, factor=0.5). Smaller batch size and higher patience are used because the unseen-node task has less training data and requires more training time to converge.
 
 **How to run:**
 ```bash

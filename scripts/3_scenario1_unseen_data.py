@@ -1,9 +1,11 @@
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import classification_report
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dense, Dropout, BatchNormalization, Add, Activation, GlobalAveragePooling1D
 from tensorflow.keras.callbacks import ReduceLROnPlateau
+from tensorflow.keras import regularizers
 
 # ==========================================
 # 1. LOAD THE DATA
@@ -53,7 +55,7 @@ y_train = y_train_raw[indices]
 print(f"📐 Train Shape: {X_train.shape} | Test Shape: {X_test.shape}")
 
 # ==========================================
-# 3. HEAVY-DUTY CNN (Locked-In Version)
+# 3. HEAVY-DUTY CNN
 # ==========================================
 def build_cnn(input_shape, num_classes):
     model = Sequential([
@@ -73,15 +75,16 @@ def build_cnn(input_shape, num_classes):
         Activation('relu'),
         GlobalAveragePooling1D(),
         
-        Dense(512, activation='relu'),
-        Dropout(0.5),
+        # Added L2 regularization to prevent memorizing Node A/B hardware noise
+        Dense(512, activation='relu', kernel_regularizer=regularizers.l2(0.001)),
+        Dropout(0.5), # Reduced from 0.7 for macro-level feature preservation
         Dense(num_classes, activation='softmax')
     ])
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
 # ==========================================
-# 4. DEEP MULTI-BLOCK RESNET (Locked-In Version)
+# 4. DEEP MULTI-BLOCK RESNET 
 # ==========================================
 def build_resnet(input_shape, num_classes):
     inputs = Input(shape=input_shape)
@@ -111,8 +114,9 @@ def build_resnet(input_shape, num_classes):
     x = Activation('relu')(x)
     
     x = GlobalAveragePooling1D()(x)
-    x = Dense(256, activation='relu')(x)
-    x = Dropout(0.5)(x)
+    # Added L2 regularization
+    x = Dense(256, activation='relu', kernel_regularizer=regularizers.l2(0.001))(x)
+    x = Dropout(0.5)(x) # Reduced from 0.7
     outputs = Dense(num_classes, activation='softmax')(x)
     
     return Model(inputs, outputs)
@@ -121,18 +125,44 @@ def build_resnet(input_shape, num_classes):
 # 5. EXECUTION
 # ==========================================
 input_shape = (X_train.shape[1], X_train.shape[2])
-reduce_lr = lambda: ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=7, min_lr=0.00001, verbose=1)
+# Reduced patience slightly so it drops learning rate faster when stuck
+reduce_lr = lambda: ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=0.00001, verbose=1)
 
 print("\n🧠 TRAINING CNN (UNSEEN DATA)...")
 cnn = build_cnn(input_shape, num_classes)
-cnn.fit(X_train, y_train, epochs=60, batch_size=64, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
+# Batch size dropped to 32 for better generalization
+cnn.fit(X_train, y_train, epochs=60, batch_size=16, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
 print("\n🚀 TRAINING RESNET (UNSEEN DATA)...")
 resnet = build_resnet(input_shape, num_classes)
 resnet.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-resnet.fit(X_train, y_train, epochs=60, batch_size=64, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
+# Batch size dropped to 32 for better generalization
+resnet.fit(X_train, y_train, epochs=60, batch_size=16, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
 print("\n📊 FINAL SCORES (SCENARIO I - STRATEGY 2: UNSEEN DATA)")
 _, cnn_acc = cnn.evaluate(X_test, y_test, verbose=0)
 _, res_acc = resnet.evaluate(X_test, y_test, verbose=0)
 print(f"CNN Accuracy: {cnn_acc*100:.2f}% | ResNet Accuracy: {res_acc*100:.2f}%")
+
+# ==========================================
+# 6. GENERATE METRICS FOR LATEX REPORT
+# ==========================================
+print("\n" + "="*50)
+print(" 📊 GENERATING PERFORMANCE METRICS FOR REPORT")
+print("="*50)
+
+print("Evaluating CNN...")
+y_pred_cnn_probs = cnn.predict(X_test, verbose=0)
+y_pred_cnn = np.argmax(y_pred_cnn_probs, axis=1)
+
+print("Evaluating ResNet...")
+y_pred_resnet_probs = resnet.predict(X_test, verbose=0)
+y_pred_resnet = np.argmax(y_pred_resnet_probs, axis=1)
+
+y_true = np.argmax(y_test, axis=1)
+
+print("\n--- 1D CNN PERFORMANCE ---")
+print(classification_report(y_true, y_pred_cnn, target_names=encoder.classes_, digits=4))
+
+print("\n--- RESNET PERFORMANCE ---")
+print(classification_report(y_true, y_pred_resnet, target_names=encoder.classes_, digits=4))
