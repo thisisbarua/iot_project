@@ -173,9 +173,13 @@ The `6_scenario2_unseen_data.py` script is the **ultimate test** of whether the 
 - **Per-Window Z-Score Standardization:** Divides by per-window standard deviation on top of the already zero-mean centered data. This removes environment-dependent signal variance (e.g., forest = high multipath fading, open_field = low variance).
 - **Differential-Only Features:** Slices to keep only `Diff_RSSI` and `Diff_LQI` (columns 2 & 3). Raw RSSI/LQI still carry environmental bias even after centering — differentials capture rapid hardware-specific micro-jitter instead.
 
-**Models:** Same architectures as Step 5 (Heavy-Duty CNN + Deep Multi-Block ResNet).
+**Models:**
+- **Heavy-Duty 1D CNN:** A 3-layer convolutional network (128→256→512 filters) with kernel sizes 11, 7, 3. Uses BatchNormalization, ReLU, MaxPooling, GlobalAveragePooling, and a Dense(512) + Dropout(0.5) head.
+- **Deep Multi-Block ResNet:** 2 residual blocks with skip connections. Block 1: 256 filters (kernels 5, 3). Block 2: 512 filters with stride-2 downsampling. GlobalAveragePooling + Dense(512) + Dropout(0.7) head.
 
-**Hyperparameters:** 80 epochs, batch size 32, Adam optimizer, ReduceLROnPlateau (patience=7, factor=0.5).
+**Hyperparameters:** 40 epochs, batch size 32, Adam optimizer, ReduceLROnPlateau (patience=7, factor=0.5).
+
+**Output:** Prints accuracy scores plus full `classification_report` (precision, recall, F1-score, support) for both models — ready for LaTeX report tables.
 
 > **Important:** You must re-run `4_prepare_scenario2.py` first, as it saves `y_env_labels_scen2.npy` needed for the environment-based split.
 

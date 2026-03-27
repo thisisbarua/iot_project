@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import classification_report  # <-- Added for LaTeX report metrics
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dense, Dropout, BatchNormalization, Add, Activation, GlobalAveragePooling1D
@@ -22,7 +23,7 @@ y_encoded = encoder.fit_transform(y_target)
 y_categorical = tf.keras.utils.to_categorical(y_encoded)
 num_classes = len(encoder.classes_)
 
-# Split 75/25 [cite: 56]
+# Split 75/25
 X_train, X_test, y_train, y_test = train_test_split(
     X, y_categorical, test_size=0.25, random_state=42
 )
@@ -111,3 +112,29 @@ print("\n📊 FINAL SCORES (SCENARIO II - SEEN DATA)")
 _, cnn_acc = cnn.evaluate(X_test, y_test, verbose=0)
 _, res_acc = resnet.evaluate(X_test, y_test, verbose=0)
 print(f"CNN Node Accuracy: {cnn_acc*100:.2f}% | ResNet Node Accuracy: {res_acc*100:.2f}%")
+
+# ==========================================
+# 5. GENERATE METRICS FOR LATEX REPORT
+# ==========================================
+print("\n" + "="*50)
+print(" 📊 GENERATING PERFORMANCE METRICS FOR REPORT")
+print("="*50)
+
+# Get raw predictions
+print("Evaluating CNN...")
+y_pred_cnn_probs = cnn.predict(X_test, verbose=0)
+y_pred_cnn = np.argmax(y_pred_cnn_probs, axis=1)
+
+print("Evaluating ResNet...")
+y_pred_resnet_probs = resnet.predict(X_test, verbose=0)
+y_pred_resnet = np.argmax(y_pred_resnet_probs, axis=1)
+
+# Convert actual test labels back from One-Hot Encoding
+y_true = np.argmax(y_test, axis=1)
+
+# Print the final tables for your LaTeX report
+print("\n--- 1D CNN PERFORMANCE ---")
+print(classification_report(y_true, y_pred_cnn, target_names=encoder.classes_, digits=4))
+
+print("\n--- RESNET PERFORMANCE ---")
+print(classification_report(y_true, y_pred_resnet, target_names=encoder.classes_, digits=4))
