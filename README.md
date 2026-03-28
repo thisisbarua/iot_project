@@ -98,6 +98,8 @@ The `2_scenario1_seen_data.py` script classifies **which environment** the signa
 python3 2_scenario1_seen_data.py
 ```
 
+**Output:** Prints accuracy, full `classification_report`, and saves confusion matrix plots: `scen1_seen_cnn_cm.png`, `scen1_seen_resnet_cm.png`.
+
 ---
 
 #### Step 3: Scenario I — Environment Classification (Unseen Data)
@@ -113,6 +115,8 @@ The `3_scenario1_unseen_data.py` script tests whether environment patterns gener
 ```bash
 python3 3_scenario1_unseen_data.py
 ```
+
+**Output:** Prints accuracy, full `classification_report`, and saves confusion matrix plots: `scen1_unseen_cnn_cm.png`, `scen1_unseen_resnet_cm.png`.
 
 ---
 
@@ -162,6 +166,8 @@ The `5_scenario2_seen_data.py` script attempts to identify whether the signal ca
 python3 5_scenario2_seen_data.py
 ```
 
+**Output:** Prints accuracy, full `classification_report`, and saves confusion matrix plots: `scen2_seen_cnn_cm.png`, `scen2_seen_resnet_cm.png`.
+
 ---
 
 #### Step 6: Scenario II — Sensor Node Classification (Unseen Environment)
@@ -179,7 +185,7 @@ The `6_scenario2_unseen_data.py` script is the **ultimate test** of whether the 
 
 **Hyperparameters:** 40 epochs, batch size 32, Adam optimizer, ReduceLROnPlateau (patience=7, factor=0.5).
 
-**Output:** Prints accuracy scores plus full `classification_report` (precision, recall, F1-score, support) for both models — ready for LaTeX report tables.
+**Output:** Prints accuracy scores plus full `classification_report` (precision, recall, F1-score, support) for both models, and saves confusion matrix plots: `scen2_unseen_cnn_cm.png`, `scen2_unseen_resnet_cm.png`.
 
 > **Important:** You must re-run `4_prepare_scenario2.py` first, as it saves `y_env_labels_scen2.npy` needed for the environment-based split.
 
@@ -194,5 +200,5 @@ python3 6_scenario2_unseen_data.py
 ## 🛠️ Requirements (Python)
 Ensure you have the required libraries installed:
 ```bash
-pip install pyserial pandas numpy scikit-learn tensorflow
+pip install pyserial pandas numpy scikit-learn tensorflow matplotlib
 ```
