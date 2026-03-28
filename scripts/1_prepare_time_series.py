@@ -4,36 +4,35 @@ from sklearn.preprocessing import MinMaxScaler
 import os
 
 # ==========================================
-# CONFIGURATION (Strictly following PDF Page 3)
+# CONFIGURATION
 # ==========================================
 INPUT_FILE = "ULTIMATE_MASTER_DATASET.csv"
 WINDOW_SIZE = 220
-STEP_SIZE = 110     # For exactly 50% overlap 
-FEATURES = ['RSSI', 'LQI', 'Diff_RSSI'] # Required inputs [cite: 50, 61]
+STEP_SIZE = 110     # 50% overlap 
+FEATURES = ['RSSI', 'LQI', 'Diff_RSSI']
 
 def main():
-    print(f"📥 Loading '{INPUT_FILE}'...")
+    print(f"Loading '{INPUT_FILE}'...")
     df = pd.read_csv(INPUT_FILE)
     
     # 1. Differentiation: y_i = x_{i+1} - x_i [cite: 62]
-    # This is already present in your Master files, but we ensure it's calculated
     if 'Diff_RSSI' not in df.columns:
-        print("⚙️  Computing Differentiation...")
+        print("Computing Differentiation...")
         df['Diff_RSSI'] = df.groupby(['Environment', 'Sender_Node'])['RSSI'].diff().fillna(0)
     
-    # 2. Normalization: z_i = (y_i - y_min) / (y_max - y_min) [cite: 66]
+    # 2. Normalization: z_i = (y_i - y_min) / (y_max - y_min)
     # We apply this to the raw and differentiated columns globally
     scaler = MinMaxScaler(feature_range=(0, 1))
     df[FEATURES] = scaler.fit_transform(df[FEATURES])
     
-    print("⏳ Sorting data by time...")
+    print("Sorting data by time...")
     df['Timestamp'] = pd.to_datetime(df['Timestamp'])
     df = df.sort_values(by=['Environment', 'Sender_Node', 'Timestamp'])
 
     X_list, y_env_list, y_node_list = [], [], []
 
-    # 3. Segmentation: Overlapping frames [cite: 67]
-    print(f"🪟 Slicing into {STEP_SIZE}-step windows (50% overlap)...")
+    # 3. Segmentation: Overlapping frames
+    print(f"Slicing into {STEP_SIZE}-step windows (50% overlap)...")
     grouped = df.groupby(['Environment', 'Sender_Node'])
     
     for name, group in grouped:
@@ -51,7 +50,7 @@ def main():
     y_env = np.array(y_env_list)
     y_node = np.array(y_node_list)
 
-    print(f"✅ Created {len(X)} rubric-compliant windows.")
+    print(f"Created {len(X)} rubric-compliant windows.")
     
     os.makedirs("processed_data", exist_ok=True)
     np.save("processed_data/X_windows.npy", X)

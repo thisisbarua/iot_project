@@ -1,7 +1,8 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import classification_report # <-- Added for LaTeX report metrics
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dense, Dropout, BatchNormalization, Add, Activation, GlobalAveragePooling1D
@@ -10,11 +11,11 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau
 # ==========================================
 # 1. LOAD THE 4-CHANNEL DATA
 # ==========================================
-print("📥 Loading 4-channel rubric-compliant data...")
+print("Loading 4-channel rubric-compliant data...")
 X = np.load("processed_data/X_windows.npy")
 y_env = np.load("processed_data/y_env_labels.npy")
 
-print(f"📐 Data Shape: {X.shape}") # Expecting (Samples, 100, 4)
+print(f"Data Shape: {X.shape}") 
 
 encoder = LabelEncoder()
 y_encoded = encoder.fit_transform(y_env)
@@ -97,42 +98,50 @@ def build_resnet(input_shape, num_classes):
 input_shape = (X_train.shape[1], X_train.shape[2])
 reduce_lr = lambda: ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=0.00001, verbose=1)
 
-print("\n🧠 TRAINING CNN...")
+print("\nTRAINING CNN...")
 cnn = build_cnn(input_shape, num_classes)
 cnn.fit(X_train, y_train, epochs=60, batch_size=32, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
-print("\n🚀 TRAINING RESNET...")
+print("\nTRAINING RESNET...")
 resnet = build_resnet(input_shape, num_classes)
 resnet.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 resnet.fit(X_train, y_train, epochs=60, batch_size=32, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
-print("\n📊 FINAL SCORES")
+print("\nFINAL SCORES")
 _, cnn_acc = cnn.evaluate(X_test, y_test, verbose=0)
 _, res_acc = resnet.evaluate(X_test, y_test, verbose=0)
 print(f"CNN: {cnn_acc*100:.2f}% | ResNet: {res_acc*100:.2f}%")
 
 # ==========================================
-# 5. GENERATE METRICS FOR LATEX REPORT
+# 5. GENERATE METRICS & MATRICES
 # ==========================================
 print("\n" + "="*50)
-print(" 📊 GENERATING PERFORMANCE METRICS FOR REPORT")
+print("GENERATING PERFORMANCE METRICS & MATRICES")
 print("="*50)
 
-# Get raw predictions
-print("Evaluating CNN...")
-y_pred_cnn_probs = cnn.predict(X_test, verbose=0)
-y_pred_cnn = np.argmax(y_pred_cnn_probs, axis=1)
+def evaluate_and_plot(model, model_name, filename):
+    print(f"Evaluating {model_name}...")
+    y_pred_probs = model.predict(X_test, verbose=0)
+    y_pred = np.argmax(y_pred_probs, axis=1)
+    y_true = np.argmax(y_test, axis=1)
 
-print("Evaluating ResNet...")
-y_pred_resnet_probs = resnet.predict(X_test, verbose=0)
-y_pred_resnet = np.argmax(y_pred_resnet_probs, axis=1)
+    # Print Classification Report
+    print(f"\n--- {model_name} PERFORMANCE ---")
+    print(classification_report(y_true, y_pred, target_names=encoder.classes_, digits=4))
 
-# Convert actual test labels back from One-Hot Encoding
-y_true = np.argmax(y_test, axis=1)
+    # Generate and Save Confusion Matrix
+    cm = confusion_matrix(y_true, y_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=encoder.classes_)
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+    disp.plot(cmap='Blues', values_format='d', ax=ax)
+    plt.title(f'Confusion Matrix - Scenario I Seen ({model_name})')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(filename)
+    print(f"Saved confusion matrix to {filename}")
+    plt.close()
 
-# Print the final tables for your LaTeX report
-print("\n--- 1D CNN PERFORMANCE ---")
-print(classification_report(y_true, y_pred_cnn, target_names=encoder.classes_, digits=4))
-
-print("\n--- RESNET PERFORMANCE ---")
-print(classification_report(y_true, y_pred_resnet, target_names=encoder.classes_, digits=4))
+# Generate results for both models
+evaluate_and_plot(cnn, "1D CNN", "scen1_seen_cnn_cm.png")
+evaluate_and_plot(resnet, "ResNet", "scen1_seen_resnet_cm.png")

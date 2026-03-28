@@ -5,6 +5,8 @@ from tensorflow.keras.models import Sequential, Model
 from sklearn.metrics import classification_report
 from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dense, Dropout, BatchNormalization, Add, Activation, GlobalAveragePooling1D
 from tensorflow.keras.callbacks import ReduceLROnPlateau
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 # ==========================================
 # 1. LOAD THE SCENARIO 2 CUSTOM DATA
@@ -15,13 +17,13 @@ y_node = np.load("processed_data/y_node_labels_scen2.npy")
 y_env = np.load("processed_data/y_env_labels_scen2.npy") 
 
 # ==========================================
-# ENVIRONMENT-INVARIANT TRANSFORMS (applied at runtime, file 4 untouched)
+# ENVIRONMENT-INVARIANT TRANSFORMS (applied at runtime)
 # ==========================================
 # Step A: Z-Score Standardization — normalizes variance per window.
 # The data is already zero-mean centered (from file 4), so dividing by std
 # removes the environment-dependent signal spread (e.g., forest=high variance,
 # open_field=low variance), leaving only the hardware jitter pattern.
-print("⚙️  Applying Per-Window Z-Score Standardization...")
+print("Applying Per-Window Z-Score Standardization...")
 window_std = X.std(axis=1, keepdims=True) + 1e-8
 X = X / window_std
 
@@ -29,11 +31,11 @@ X = X / window_std
 # Raw RSSI and LQI still carry environment-specific absolute patterns even after
 # centering. Differentials (sample-to-sample change) are inherently more
 # hardware-specific since they capture rapid micro-jitter from the transmitter chip.
-print("⚙️  Slicing to differential-only features: [Diff_RSSI, Diff_LQI]")
+print("Slicing to differential-only features: [Diff_RSSI, Diff_LQI]")
 X = X[:, :, [2, 3]]
-print(f"📐 Final Data Shape: {X.shape}")
+print(f"Final Data Shape: {X.shape}")
 
-# 🎯 Target is the Node!
+# Target is the Node!
 encoder = LabelEncoder()
 y_encoded = encoder.fit_transform(y_node)
 y_categorical = tf.keras.utils.to_categorical(y_encoded)
@@ -43,13 +45,13 @@ num_classes = len(encoder.classes_)
 # 2. THE "UNSEEN ENVIRONMENT" SPLIT 
 # ==========================================
 unique_envs = np.unique(y_env)
-print(f"🌲 Found environments: {unique_envs}")
+print(f"Found environments: {unique_envs}")
 
-# THE FIX: Explicitly target the lowercase 'lake' to match your dataset perfectly
+# Explicitly target the lowercase 'lake' to match the dataset perfectly
 unseen_test_env = 'lake' 
 
-print(f"🏋️ Training hardware signatures on everything EXCEPT the {unseen_test_env}...")
-print(f"🧪 Testing hardware identification strictly in the UNSEEN {unseen_test_env}...")
+print(f"Training hardware signatures on everything EXCEPT the {unseen_test_env}...")
+print(f"Testing hardware identification strictly in the UNSEEN {unseen_test_env}...")
 
 # Create masks to isolate the lake
 test_mask = y_env == unseen_test_env
@@ -69,7 +71,7 @@ np.random.shuffle(indices)
 X_train = X_train_raw[indices]
 y_train = y_train_raw[indices]
 
-print(f"📐 Train Shape: {X_train.shape} | Test Shape: {X_test.shape}")
+print(f"Train Shape: {X_train.shape} | Test Shape: {X_test.shape}")
 
 # ==========================================
 # 3. HEAVY-DUTY CNN
@@ -142,16 +144,16 @@ def build_resnet(input_shape, num_classes):
 input_shape = (X_train.shape[1], X_train.shape[2])
 reduce_lr = lambda: ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=7, min_lr=0.00001, verbose=1)
 
-print("\n🧠 TRAINING CNN (UNSEEN ENV - NODE ID)...")
+print("\nTRAINING CNN (UNSEEN ENV - NODE ID)...")
 cnn = build_cnn(input_shape, num_classes)
 cnn.fit(X_train, y_train, epochs=40, batch_size=32, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
-print("\n🚀 TRAINING RESNET (UNSEEN ENV - NODE ID)...")
+print("\nTRAINING RESNET (UNSEEN ENV - NODE ID)...")
 resnet = build_resnet(input_shape, num_classes)
 resnet.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 resnet.fit(X_train, y_train, epochs=40, batch_size=32, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
-print("\n📊 FINAL SCORES (SCENARIO II - STRATEGY 2: UNSEEN ENVIRONMENT)")
+print("\nFINAL SCORES (SCENARIO II - STRATEGY 2: UNSEEN ENVIRONMENT)")
 _, cnn_acc = cnn.evaluate(X_test, y_test, verbose=0)
 _, res_acc = resnet.evaluate(X_test, y_test, verbose=0)
 print(f"CNN Node Accuracy: {cnn_acc*100:.2f}% | ResNet Node Accuracy: {res_acc*100:.2f}%")
@@ -161,7 +163,7 @@ print(f"CNN Node Accuracy: {cnn_acc*100:.2f}% | ResNet Node Accuracy: {res_acc*1
 # 5. GENERATE METRICS FOR LATEX REPORT
 # ==========================================
 print("\n" + "="*50)
-print(" 📊 GENERATING PERFORMANCE METRICS FOR REPORT")
+print(" GENERATING PERFORMANCE METRICS FOR REPORT")
 print("="*50)
 
 # Get raw predictions
@@ -182,3 +184,36 @@ print(classification_report(y_true, y_pred_cnn, target_names=encoder.classes_, d
 
 print("\n--- RESNET PERFORMANCE ---")
 print(classification_report(y_true, y_pred_resnet, target_names=encoder.classes_, digits=4))
+
+# ==========================================
+# 6. GENERATE CONFUSION MATRICES
+# ==========================================
+print("\n" + "="*50)
+print(" GENERATING CONFUSION MATRICES")
+print("="*50)
+
+# 1. 1D CNN Confusion Matrix
+print("Generating 1D CNN Confusion Matrix...")
+cm_cnn = confusion_matrix(y_true, y_pred_cnn)
+disp_cnn = ConfusionMatrixDisplay(confusion_matrix=cm_cnn, display_labels=encoder.classes_)
+fig, ax = plt.subplots(figsize=(10, 8))
+disp_cnn.plot(cmap='Blues', values_format='d', ax=ax)
+plt.title('Confusion Matrix - Scenario II Unseen Lake (1D CNN)')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig('scen2_unseen_cnn_cm.png', dpi=300)
+print("Saved matrix to scen2_unseen_cnn_cm.png")
+plt.close()
+
+# 2. ResNet Confusion Matrix
+print("Generating ResNet Confusion Matrix...")
+cm_resnet = confusion_matrix(y_true, y_pred_resnet)
+disp_resnet = ConfusionMatrixDisplay(confusion_matrix=cm_resnet, display_labels=encoder.classes_)
+fig, ax = plt.subplots(figsize=(10, 8))
+disp_resnet.plot(cmap='Blues', values_format='d', ax=ax)
+plt.title('Confusion Matrix - Scenario II Unseen Lake (ResNet)')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig('scen2_unseen_resnet_cm.png', dpi=300)
+print("Saved matrix to scen2_unseen_resnet_cm.png")
+plt.close()

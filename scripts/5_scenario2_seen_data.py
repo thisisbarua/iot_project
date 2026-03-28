@@ -6,17 +6,19 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dense, Dropout, BatchNormalization, Add, Activation, GlobalAveragePooling1D
 from tensorflow.keras.callbacks import ReduceLROnPlateau
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 # ==========================================
 # 1. LOAD THE SCENARIO 2 CUSTOM DATA
 # ==========================================
-print("📥 Loading zero-mean centered data for SCENARIO II (Seen Data)...")
+print("Loading zero-mean centered data for SCENARIO II (Seen Data)...")
 X = np.load("processed_data/X_windows_scen2.npy")
 
-# 🎯 Target is the Nodes
+# Target is the Nodes
 y_target = np.load("processed_data/y_node_labels_scen2.npy")
 
-print(f"📐 Data Shape: {X.shape}") # Expecting (Samples, 250, 3)
+print(f"📐 Data Shape: {X.shape}")
 
 encoder = LabelEncoder()
 y_encoded = encoder.fit_transform(y_target)
@@ -99,16 +101,16 @@ def build_resnet(input_shape, num_classes):
 input_shape = (X_train.shape[1], X_train.shape[2])
 reduce_lr = lambda: ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=7, min_lr=0.00001, verbose=1)
 
-print("\n🧠 TRAINING CNN (SCENARIO II - NODE IDENTIFICATION)...")
+print("\nTRAINING CNN (SCENARIO II - NODE IDENTIFICATION)...")
 cnn = build_cnn(input_shape, num_classes)
 cnn.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
-print("\n🚀 TRAINING RESNET (SCENARIO II - NODE IDENTIFICATION)...")
+print("\nTRAINING RESNET (SCENARIO II - NODE IDENTIFICATION)...")
 resnet = build_resnet(input_shape, num_classes)
 resnet.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 resnet.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
-print("\n📊 FINAL SCORES (SCENARIO II - SEEN DATA)")
+print("\nFINAL SCORES (SCENARIO II - SEEN DATA)")
 _, cnn_acc = cnn.evaluate(X_test, y_test, verbose=0)
 _, res_acc = resnet.evaluate(X_test, y_test, verbose=0)
 print(f"CNN Node Accuracy: {cnn_acc*100:.2f}% | ResNet Node Accuracy: {res_acc*100:.2f}%")
@@ -117,7 +119,7 @@ print(f"CNN Node Accuracy: {cnn_acc*100:.2f}% | ResNet Node Accuracy: {res_acc*1
 # 5. GENERATE METRICS FOR LATEX REPORT
 # ==========================================
 print("\n" + "="*50)
-print(" 📊 GENERATING PERFORMANCE METRICS FOR REPORT")
+print("GENERATING PERFORMANCE METRICS FOR REPORT")
 print("="*50)
 
 # Get raw predictions
@@ -132,9 +134,42 @@ y_pred_resnet = np.argmax(y_pred_resnet_probs, axis=1)
 # Convert actual test labels back from One-Hot Encoding
 y_true = np.argmax(y_test, axis=1)
 
-# Print the final tables for your LaTeX report
+# Print the final tables for the LaTeX report
 print("\n--- 1D CNN PERFORMANCE ---")
 print(classification_report(y_true, y_pred_cnn, target_names=encoder.classes_, digits=4))
 
 print("\n--- RESNET PERFORMANCE ---")
 print(classification_report(y_true, y_pred_resnet, target_names=encoder.classes_, digits=4))
+
+# ==========================================
+# 6. GENERATE CONFUSION MATRICES
+# ==========================================
+print("\n" + "="*50)
+print(" GENERATING CONFUSION MATRICES")
+print("="*50)
+
+# 1. 1D CNN Confusion Matrix
+print("Generating 1D CNN Confusion Matrix...")
+cm_cnn = confusion_matrix(y_true, y_pred_cnn)
+disp_cnn = ConfusionMatrixDisplay(confusion_matrix=cm_cnn, display_labels=encoder.classes_)
+fig, ax = plt.subplots(figsize=(10, 8))
+disp_cnn.plot(cmap='Blues', values_format='d', ax=ax)
+plt.title('Confusion Matrix - Scenario II Seen (1D CNN)')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig('scen2_seen_cnn_cm.png', dpi=300)
+print("Saved matrix to scen2_seen_cnn_cm.png")
+plt.close()
+
+# 2. ResNet Confusion Matrix
+print("Generating ResNet Confusion Matrix...")
+cm_resnet = confusion_matrix(y_true, y_pred_resnet)
+disp_resnet = ConfusionMatrixDisplay(confusion_matrix=cm_resnet, display_labels=encoder.classes_)
+fig, ax = plt.subplots(figsize=(10, 8))
+disp_resnet.plot(cmap='Blues', values_format='d', ax=ax)
+plt.title('Confusion Matrix - Scenario II Seen (ResNet)')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig('scen2_seen_resnet_cm.png', dpi=300)
+print("Saved matrix to scen2_seen_resnet_cm.png")
+plt.close()

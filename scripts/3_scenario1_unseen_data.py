@@ -1,6 +1,7 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dense, Dropout, BatchNormalization, Add, Activation, GlobalAveragePooling1D
@@ -22,17 +23,17 @@ y_categorical = tf.keras.utils.to_categorical(y_encoded)
 num_classes = len(encoder.classes_)
 
 # ==========================================
-# 2. THE "UNSEEN DATA" SPLIT (Strategy 2)
+# 2. THE "UNSEEN DATA" SPLIT
 # ==========================================
 unique_nodes = np.unique(y_node)
-print(f"📡 Found sensor nodes: {unique_nodes}")
+print(f"Found sensor nodes: {unique_nodes}")
 
-# Reserve the very last node in your dataset as the "Unseen" test node
+# Reserve the very last node in the dataset as the "Unseen" test node
 unseen_test_node = unique_nodes[-1]
 train_nodes = unique_nodes[:-1]
 
-print(f"🏋️ Training on nodes: {train_nodes}")
-print(f"🧪 Testing strictly on UNSEEN node: {unseen_test_node}")
+print(f"Training on nodes: {train_nodes}")
+print(f"Testing strictly on UNSEEN node: {unseen_test_node}")
 
 # Create masks to separate the data
 train_mask = np.isin(y_node, train_nodes)
@@ -44,7 +45,7 @@ X_test = X[test_mask]
 y_test = y_categorical[test_mask]
 
 # ==========================================
-# THE FIX: SHUFFLE BEFORE KERAS SPLITS IT
+# SHUFFLE BEFORE KERAS SPLITS IT
 # ==========================================
 # This mixes the environments so validation_split gets a random sample!
 indices = np.arange(len(X_train_raw))
@@ -52,7 +53,7 @@ np.random.shuffle(indices)
 X_train = X_train_raw[indices]
 y_train = y_train_raw[indices]
 
-print(f"📐 Train Shape: {X_train.shape} | Test Shape: {X_test.shape}")
+print(f"Train Shape: {X_train.shape} | Test Shape: {X_test.shape}")
 
 # ==========================================
 # 3. HEAVY-DUTY CNN
@@ -125,44 +126,53 @@ def build_resnet(input_shape, num_classes):
 # 5. EXECUTION
 # ==========================================
 input_shape = (X_train.shape[1], X_train.shape[2])
-# Reduced patience slightly so it drops learning rate faster when stuck
 reduce_lr = lambda: ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=0.00001, verbose=1)
 
-print("\n🧠 TRAINING CNN (UNSEEN DATA)...")
+print("\nTRAINING CNN (UNSEEN DATA)...")
 cnn = build_cnn(input_shape, num_classes)
-# Batch size dropped to 32 for better generalization
 cnn.fit(X_train, y_train, epochs=60, batch_size=16, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
-print("\n🚀 TRAINING RESNET (UNSEEN DATA)...")
+print("\nTRAINING RESNET (UNSEEN DATA)...")
 resnet = build_resnet(input_shape, num_classes)
 resnet.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-# Batch size dropped to 32 for better generalization
 resnet.fit(X_train, y_train, epochs=60, batch_size=16, validation_split=0.1, callbacks=[reduce_lr()], verbose=1)
 
-print("\n📊 FINAL SCORES (SCENARIO I - STRATEGY 2: UNSEEN DATA)")
+print("\nFINAL SCORES (SCENARIO I - STRATEGY 2: UNSEEN DATA)")
 _, cnn_acc = cnn.evaluate(X_test, y_test, verbose=0)
 _, res_acc = resnet.evaluate(X_test, y_test, verbose=0)
 print(f"CNN Accuracy: {cnn_acc*100:.2f}% | ResNet Accuracy: {res_acc*100:.2f}%")
 
 # ==========================================
-# 6. GENERATE METRICS FOR LATEX REPORT
+# 6. GENERATE METRICS & MATRICES FOR LATEX REPORT
 # ==========================================
 print("\n" + "="*50)
-print(" 📊 GENERATING PERFORMANCE METRICS FOR REPORT")
+print("GENERATING PERFORMANCE METRICS & MATRICES")
 print("="*50)
 
-print("Evaluating CNN...")
-y_pred_cnn_probs = cnn.predict(X_test, verbose=0)
-y_pred_cnn = np.argmax(y_pred_cnn_probs, axis=1)
+def evaluate_and_plot(model, model_name, filename):
+    print(f"Evaluating {model_name}...")
+    y_pred_probs = model.predict(X_test, verbose=0)
+    y_pred = np.argmax(y_pred_probs, axis=1)
+    y_true = np.argmax(y_test, axis=1)
 
-print("Evaluating ResNet...")
-y_pred_resnet_probs = resnet.predict(X_test, verbose=0)
-y_pred_resnet = np.argmax(y_pred_resnet_probs, axis=1)
+    # Print Classification Report
+    print(f"\n--- {model_name} PERFORMANCE ---")
+    print(classification_report(y_true, y_pred, target_names=encoder.classes_, digits=4))
 
-y_true = np.argmax(y_test, axis=1)
+    # Generate Confusion Matrix
+    cm = confusion_matrix(y_true, y_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=encoder.classes_)
+    
+    # Plotting
+    fig, ax = plt.subplots(figsize=(10, 8))
+    disp.plot(cmap='Blues', values_format='d', ax=ax)
+    plt.title(f'Confusion Matrix - Scenario I Unseen Node ({model_name})')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(filename)
+    print(f"Saved matrix to {filename}")
+    plt.close()
 
-print("\n--- 1D CNN PERFORMANCE ---")
-print(classification_report(y_true, y_pred_cnn, target_names=encoder.classes_, digits=4))
-
-print("\n--- RESNET PERFORMANCE ---")
-print(classification_report(y_true, y_pred_resnet, target_names=encoder.classes_, digits=4))
+# Generate for both
+evaluate_and_plot(cnn, "1D CNN", "scen1_unseen_cnn_cm.png")
+evaluate_and_plot(resnet, "ResNet", "scen1_unseen_resnet_cm.png")
