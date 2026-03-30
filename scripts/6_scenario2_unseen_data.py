@@ -11,7 +11,7 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 # ==========================================
 # 1. LOAD THE SCENARIO 2 CUSTOM DATA
 # ==========================================
-print("📥 Loading zero-mean centered data for SCENARIO II...")
+print("Loading zero-mean centered data for SCENARIO II...")
 X = np.load("processed_data/X_windows_scen2.npy")
 y_node = np.load("processed_data/y_node_labels_scen2.npy")
 y_env = np.load("processed_data/y_env_labels_scen2.npy") 
@@ -19,23 +19,18 @@ y_env = np.load("processed_data/y_env_labels_scen2.npy")
 # ==========================================
 # ENVIRONMENT-INVARIANT TRANSFORMS (applied at runtime)
 # ==========================================
-# Step A: Z-Score Standardization — normalizes variance per window.
-# The data is already zero-mean centered (from file 4), so dividing by std
-# removes the environment-dependent signal spread (e.g., forest=high variance,
-# open_field=low variance), leaving only the hardware jitter pattern.
+# Z-Score Standardization: normalizes variance per window
+# Dividing by std removes environment-dependent signal spread
 print("Applying Per-Window Z-Score Standardization...")
 window_std = X.std(axis=1, keepdims=True) + 1e-8
 X = X / window_std
 
-# Step B: Keep ONLY differential features (columns 2=Diff_RSSI, 3=Diff_LQI).
-# Raw RSSI and LQI still carry environment-specific absolute patterns even after
-# centering. Differentials (sample-to-sample change) are inherently more
-# hardware-specific since they capture rapid micro-jitter from the transmitter chip.
+# Keep only differential features (Diff_RSSI, Diff_LQI)
 print("Slicing to differential-only features: [Diff_RSSI, Diff_LQI]")
 X = X[:, :, [2, 3]]
 print(f"Final Data Shape: {X.shape}")
 
-# Target is the Node!
+# Target is the Node
 encoder = LabelEncoder()
 y_encoded = encoder.fit_transform(y_node)
 y_categorical = tf.keras.utils.to_categorical(y_encoded)
@@ -47,8 +42,7 @@ num_classes = len(encoder.classes_)
 unique_envs = np.unique(y_env)
 print(f"Found environments: {unique_envs}")
 
-# Explicitly target the lowercase 'lake' to match the dataset perfectly
-unseen_test_env = 'lake' 
+unseen_test_env = 'lake'
 
 print(f"Training hardware signatures on everything EXCEPT the {unseen_test_env}...")
 print(f"Testing hardware identification strictly in the UNSEEN {unseen_test_env}...")
@@ -62,10 +56,7 @@ y_train_raw = y_categorical[train_mask]
 X_test = X[test_mask]
 y_test = y_categorical[test_mask]
 
-# ==========================================
-# THE SHUFFLE FIX
-# ==========================================
-# Mix the nodes and environments so validation_split gets a healthy random sample!
+# Shuffle training data so validation_split gets a random sample
 indices = np.arange(len(X_train_raw))
 np.random.shuffle(indices)
 X_train = X_train_raw[indices]
@@ -178,7 +169,7 @@ y_pred_resnet = np.argmax(y_pred_resnet_probs, axis=1)
 # Convert actual test labels back from One-Hot Encoding
 y_true = np.argmax(y_test, axis=1)
 
-# Print the final tables for your LaTeX report
+# Classification reports
 print("\n--- 1D CNN PERFORMANCE ---")
 print(classification_report(y_true, y_pred_cnn, target_names=encoder.classes_, digits=4))
 

@@ -15,7 +15,7 @@ def main():
     print(f"Loading '{INPUT_FILE}'...")
     df = pd.read_csv(INPUT_FILE)
     
-    # 1. Differentiation: y_i = x_{i+1} - x_i [cite: 62]
+    # Differentiation: compute sample-to-sample RSSI change
     if 'Diff_RSSI' not in df.columns:
         print("Computing Differentiation...")
         df['Diff_RSSI'] = df.groupby(['Environment', 'Sender_Node'])['RSSI'].diff().fillna(0)
@@ -50,7 +50,7 @@ def main():
     y_env = np.array(y_env_list)
     y_node = np.array(y_node_list)
 
-    print(f"Created {len(X)} rubric-compliant windows.")
+    print(f"Created {len(X)} windows.")
     
     os.makedirs("processed_data", exist_ok=True)
     np.save("processed_data/X_windows.npy", X)

@@ -19,7 +19,7 @@ def main():
     if 'Diff_RSSI' not in df.columns:
         df['Diff_RSSI'] = df.groupby(['Environment', 'Sender_Node'])['RSSI'].diff().fillna(0)
         
-    # Calculate Diff_LQI before trying to slice the features!
+    # Calculate Diff_LQI before slicing features
     if 'Diff_LQI' not in df.columns:
         df['Diff_LQI'] = df.groupby(['Environment', 'Sender_Node'])['LQI'].diff().fillna(0)
     
@@ -41,9 +41,8 @@ def main():
         for i in range(0, len(feats) - WINDOW_SIZE + 1, STEP_SIZE):
             window = feats[i : i + WINDOW_SIZE]
             
-            # CRITICAL RF FINGERPRINTING STEP: Zero-Mean Centering
-            # We subtract the mean to remove the absolute power level (the environment)
-            # We DO NOT divide by variance, because the variance IS the hardware fingerprint
+            # Zero-Mean Centering: subtract mean to remove absolute power level
+            # We keep variance intact since it contains the hardware fingerprint
             window_mean = np.mean(window, axis=0)
             window_centered = window - window_mean
             

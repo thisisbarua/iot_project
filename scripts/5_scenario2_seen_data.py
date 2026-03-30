@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import classification_report  # <-- Added for LaTeX report metrics
+from sklearn.metrics import classification_report
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dense, Dropout, BatchNormalization, Add, Activation, GlobalAveragePooling1D
@@ -18,7 +18,7 @@ X = np.load("processed_data/X_windows_scen2.npy")
 # Target is the Nodes
 y_target = np.load("processed_data/y_node_labels_scen2.npy")
 
-print(f"📐 Data Shape: {X.shape}")
+print(f"Data Shape: {X.shape}")
 
 encoder = LabelEncoder()
 y_encoded = encoder.fit_transform(y_target)

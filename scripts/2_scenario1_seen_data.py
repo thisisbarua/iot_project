@@ -11,7 +11,7 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau
 # ==========================================
 # 1. LOAD THE 4-CHANNEL DATA
 # ==========================================
-print("Loading 4-channel rubric-compliant data...")
+print("Loading data...")
 X = np.load("processed_data/X_windows.npy")
 y_env = np.load("processed_data/y_env_labels.npy")
 

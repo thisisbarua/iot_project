@@ -11,7 +11,7 @@ from tensorflow.keras import regularizers
 # ==========================================
 # 1. LOAD THE DATA
 # ==========================================
-print("📥 Loading rubric-compliant data...")
+print("Loading data...")
 X = np.load("processed_data/X_windows.npy")
 y_env = np.load("processed_data/y_env_labels.npy")
 y_node = np.load("processed_data/y_node_labels.npy")
@@ -47,7 +47,7 @@ y_test = y_categorical[test_mask]
 # ==========================================
 # SHUFFLE BEFORE KERAS SPLITS IT
 # ==========================================
-# This mixes the environments so validation_split gets a random sample!
+# Shuffle so validation_split gets a random sample
 indices = np.arange(len(X_train_raw))
 np.random.shuffle(indices)
 X_train = X_train_raw[indices]
@@ -76,9 +76,8 @@ def build_cnn(input_shape, num_classes):
         Activation('relu'),
         GlobalAveragePooling1D(),
         
-        # Added L2 regularization to prevent memorizing Node A/B hardware noise
         Dense(512, activation='relu', kernel_regularizer=regularizers.l2(0.001)),
-        Dropout(0.5), # Reduced from 0.7 for macro-level feature preservation
+        Dropout(0.5),
         Dense(num_classes, activation='softmax')
     ])
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
@@ -115,9 +114,8 @@ def build_resnet(input_shape, num_classes):
     x = Activation('relu')(x)
     
     x = GlobalAveragePooling1D()(x)
-    # Added L2 regularization
     x = Dense(256, activation='relu', kernel_regularizer=regularizers.l2(0.001))(x)
-    x = Dropout(0.5)(x) # Reduced from 0.7
+    x = Dropout(0.5)(x)
     outputs = Dense(num_classes, activation='softmax')(x)
     
     return Model(inputs, outputs)

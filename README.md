@@ -2,7 +2,7 @@
 
 This repository contains the full pipeline for an IoT-based environment classification system. It leverages nRF52840 nodes running RIOT OS to collect wireless signal data (RSSI, LQI), Python scripts to log this data over serial, and Deep Learning models (CNN, ResNet) to classify the surrounding environment based on the radio wave characteristics.
 
-## 📁 Repository Structure
+## Repository Structure
 
 ### 1. Embedded Firmware (RIOT OS)
 The firmware runs on hardware nodes (e.g., nRF52840 dongles or dev boards) flashed with RIOT OS.
@@ -18,11 +18,11 @@ These scripts run on the laptop connected to the "Receiver" node (Sniffer) via U
 ### 3. Machine Learning & Processing (Python)
 Once data is collected from different environments, it is processed and fed into neural networks.
 - **`scripts/1_prepare_time_series.py`**: Takes the `ULTIMATE_MASTER_DATASET.csv`, computes differential RSSI, normalizes all features via MinMax scaling, and slices the data into overlapping time windows with 50% overlap. Outputs `.npy` array files into a `processed_data/` folder.
-- **`scripts/2_scenario1_seen_data.py`**: **Scenario I, Strategy 1 (Seen Data)** — Loads the preprocessed windows and trains two deep learning models (1D CNN and Deep Multi-Block ResNet) to classify **environments**. Uses a random 75/25 train/test split, so the models see data from all nodes and environments during training.
-- **`scripts/3_scenario1_unseen_data.py`**: **Scenario I, Strategy 2 (Unseen Data)** — Same environment classification task, but splits by **sensor node**: trains on Node_A + Node_B data, tests on Node_C data (completely unseen). Tests whether environment signatures generalize across different hardware.
+- **`scripts/2_scenario1_seen_data.py`**: **Scenario I, Strategy 1 (Seen Data)**  - Loads the preprocessed windows and trains two deep learning models (1D CNN and Deep Multi-Block ResNet) to classify **environments**. Uses a random 75/25 train/test split, so the models see data from all nodes and environments during training.
+- **`scripts/3_scenario1_unseen_data.py`**: **Scenario I, Strategy 2 (Unseen Data)**  - Same environment classification task, but splits by **sensor node**: trains on Node_A + Node_B data, tests on Node_C data (completely unseen). Tests whether environment signatures generalize across different hardware.
 - **`scripts/4_prepare_scenario2.py`**: Alternative data preparation for **Scenario II**. Computes both `Diff_RSSI` and `Diff_LQI`, then uses **Zero-Mean Centering** per 1000-step window instead of global MinMaxScaler. Uses all 4 features (RSSI, LQI, Diff_RSSI, Diff_LQI) with a step size of 485 to capture longer-duration RF hardware fingerprints.
-- **`scripts/5_scenario2_seen_data.py`**: **Scenario II (Node Classification)** — Uses the Zero-Mean centered data to classify which specific hardware node generated the signal. Implements a Heavy-Duty 1D CNN (128→256→512 filters) and a Deep Multi-Block ResNet with high dropout (0.7) for robust node identification.
-- **`scripts/6_scenario2_unseen_data.py`**: **Scenario II, Strategy 2 (Unseen Environment)** — The ultimate generalization test. Trains on 4 environments and tests node classification on the unseen `lake` environment. Applies additional runtime transforms (Per-Window Z-Score Standardization + differential-only feature slicing) to strip environment-specific patterns without modifying the shared preprocessed data from Step 4.
+- **`scripts/5_scenario2_seen_data.py`**: **Scenario II (Node Classification)**  - Uses the Zero-Mean centered data to classify which specific hardware node generated the signal. Implements a Heavy-Duty 1D CNN (128→256→512 filters) and a Deep Multi-Block ResNet with high dropout (0.7) for robust node identification.
+- **`scripts/6_scenario2_unseen_data.py`**: **Scenario II, Strategy 2 (Unseen Environment)**  - The ultimate generalization test. Trains on 4 environments and tests node classification on the unseen `lake` environment. Applies additional runtime transforms (Per-Window Z-Score Standardization + differential-only feature slicing) to strip environment-specific patterns without modifying the shared preprocessed data from Step 4.
 
 ### 4. Datasets
 - **`data/environment/`**: Contains the master CSVs recorded for each of the five distinct environments: `Bridge_Master.csv`, `Forest_Master.csv`, `Lake_Master.csv`, `Open_Field_Master.csv`, and `River_Master.csv`.
@@ -31,7 +31,7 @@ Once data is collected from different environments, it is processed and fed into
 
 ---
 
-## 🚀 How to Run the Project
+## How to Run the Project
 
 ### Phase 1: Flashing the Nodes
 You must have the [RIOT OS toolchain](https://github.com/RIOT-OS/RIOT) set up.
@@ -74,22 +74,22 @@ python3 1_prepare_time_series.py
 ```
 
 **Output:** Creates a `processed_data/` directory with:
-- `X_windows.npy` — 220 timesteps × 3 features per window
-- `y_env_labels.npy` — Environment label per window (bridge, forest, lake, open_field, river)
-- `y_node_labels.npy` — Sensor node label per window (Node_A, Node_B, Node_C)
+- `X_windows.npy`  - 220 timesteps × 3 features per window
+- `y_env_labels.npy`  - Environment label per window (bridge, forest, lake, open_field, river)
+- `y_node_labels.npy`  - Sensor node label per window (Node_A, Node_B, Node_C)
 
-> **Why MinMax Scaling here?** For environment classification (Scenario I), absolute signal strength is a powerful discriminator — a Bridge and a Forest produce very different RSSI levels. MinMax scaling preserves these absolute levels while normalizing them to [0, 1]. This is the **opposite** of what Scenario II needs (see Step 4), which is why two separate preprocessing scripts exist.
+> **Why MinMax Scaling here?** For environment classification (Scenario I), absolute signal strength is a powerful discriminator  - a Bridge and a Forest produce very different RSSI levels. MinMax scaling preserves these absolute levels while normalizing them to [0, 1]. This is the **opposite** of what Scenario II needs (see Step 4), which is why two separate preprocessing scripts exist.
 
 ---
 
-#### Step 2: Scenario I — Environment Classification (Seen Data)
+#### Step 2: Scenario I  - Environment Classification (Seen Data)
 The `2_scenario1_seen_data.py` script classifies **which environment** the signal was recorded in.
 
 **Data Split:** Random 75/25 train/test split across all nodes and environments (Strategy 1: "Seen Data"). The model sees examples from every environment during training.
 
 **Models:**
-- **1D CNN** — 3-layer convolutional network (128→256→512 filters) with kernel sizes 11, 7, 3. Uses BatchNormalization, ReLU, MaxPooling, GlobalAveragePooling, and a Dense(512) + Dropout(0.5) head.
-- **Deep Multi-Block ResNet** — 2 residual blocks with skip connections. Block 1: 128 filters (kernels 5, 3). Block 2: 256 filters with stride-2 downsampling. GlobalAveragePooling + Dense(256) + Dropout(0.5) head.
+- **1D CNN**  - 3-layer convolutional network (128→256→512 filters) with kernel sizes 11, 7, 3. Uses BatchNormalization, ReLU, MaxPooling, GlobalAveragePooling, and a Dense(512) + Dropout(0.5) head.
+- **Deep Multi-Block ResNet**  - 2 residual blocks with skip connections. Block 1: 128 filters (kernels 5, 3). Block 2: 256 filters with stride-2 downsampling. GlobalAveragePooling + Dense(256) + Dropout(0.5) head.
 
 **Hyperparameters:** 60 epochs, batch size 32, Adam optimizer, ReduceLROnPlateau (patience=3, factor=0.5).
 
@@ -102,7 +102,7 @@ python3 2_scenario1_seen_data.py
 
 ---
 
-#### Step 3: Scenario I — Environment Classification (Unseen Data)
+#### Step 3: Scenario I  - Environment Classification (Unseen Data)
 The `3_scenario1_unseen_data.py` script tests whether environment patterns generalize **across different sensor nodes**.
 
 **Data Split:** Split by sensor node (Strategy 2: "Unseen Data"). Trains on Node_A + Node_B, tests on Node_C. The training data is shuffled before Keras `validation_split` to ensure the validation set contains a mix of all environments.
@@ -126,7 +126,7 @@ The `4_prepare_scenario2.py` script radically changes the preprocessing strategy
 **What it does:**
 - Computes both differential features: `Diff_RSSI` and `Diff_LQI` (change between consecutive samples).
 - Sliding window segmentation with **1000 samples** per window and a step size of 485.
-- Uses **4 features**: RSSI, LQI, Diff_RSSI, Diff_LQI — the differential features capture rapid hardware-specific jitter patterns.
+- Uses **4 features**: RSSI, LQI, Diff_RSSI, Diff_LQI  - the differential features capture rapid hardware-specific jitter patterns.
 - **Core Difference:** Replaces Global MinMax Scaling with **Per-Window Zero-Mean Centering**. It subtracts the mean of *each individual 1000-step window* from itself. 
 
 **Why NOT MinMax for Scenario II?**
@@ -137,9 +137,9 @@ MinMax scaling normalizes the entire dataset to [0, 1] but **preserves the relat
 - **Node_A in Forest** transmits at RSSI ≈ -85 dBm → MinMax maps this to ~0.2
 - **Node_B in Bridge** transmits at RSSI ≈ -62 dBm → MinMax maps this to ~0.78
 
-Under MinMax, the model sees Node_A-in-Bridge (0.8) as **more similar to Node_B-in-Bridge (0.78)** than to **Node_A-in-Forest (0.2)** — even though A-Bridge and A-Forest come from the *same hardware*. The environment dominates the signal, drowning out the subtle hardware fingerprint. The model ends up classifying environments, not nodes.
+Under MinMax, the model sees Node_A-in-Bridge (0.8) as **more similar to Node_B-in-Bridge (0.78)** than to **Node_A-in-Forest (0.2)**  - even though A-Bridge and A-Forest come from the *same hardware*. The environment dominates the signal, drowning out the subtle hardware fingerprint. The model ends up classifying environments, not nodes.
 
-**Zero-Mean Centering fixes this** by subtracting each window's mean, collapsing all environments to fluctuate around zero. What remains is the high-frequency **shape** and **variance** of the signal — the unique RF imperfections caused by manufacturing tolerances in each transmitter chip. This is the true hardware fingerprint.
+**Zero-Mean Centering fixes this** by subtracting each window's mean, collapsing all environments to fluctuate around zero. What remains is the high-frequency **shape** and **variance** of the signal  - the unique RF imperfections caused by manufacturing tolerances in each transmitter chip. This is the true hardware fingerprint.
 
 > **Why two preprocessing scripts?** Scenario I needs the absolute signal level (environment = different RSSI). Scenario II needs it removed (same node = same fingerprint regardless of environment). These are fundamentally opposite requirements, hence `1_prepare_time_series.py` (MinMax) and `4_prepare_scenario2.py` (Zero-Mean Centering).
 
@@ -150,7 +150,7 @@ python3 4_prepare_scenario2.py
 
 ---
 
-#### Step 5: Scenario II — Sensor Node Classification (Seen Environment)
+#### Step 5: Scenario II  - Sensor Node Classification (Seen Environment)
 The `5_scenario2_seen_data.py` script attempts to identify whether the signal came from Node_A, Node_B, or Node_C, regardless of the environment.
 
 **Challenge:** The nodes are the exact same hardware model (nRF52840), making their RF fingerprints incredibly similar.
@@ -170,14 +170,14 @@ python3 5_scenario2_seen_data.py
 
 ---
 
-#### Step 6: Scenario II — Sensor Node Classification (Unseen Environment)
+#### Step 6: Scenario II  - Sensor Node Classification (Unseen Environment)
 The `6_scenario2_unseen_data.py` script is the **ultimate test** of whether the RF hardware fingerprint is truly environment-invariant.
 
 **Data Split:** Instead of a random split, the data is split by **environment**. The models train on data from 4 environments (bridge, forest, open_field, river) and are tested on the unseen `lake` environment.
 
 **Environment-Invariant Transforms (applied at runtime, file 4 untouched):**
 - **Per-Window Z-Score Standardization:** Divides by per-window standard deviation on top of the already zero-mean centered data. This removes environment-dependent signal variance (e.g., forest = high multipath fading, open_field = low variance).
-- **Differential-Only Features:** Slices to keep only `Diff_RSSI` and `Diff_LQI` (columns 2 & 3). Raw RSSI/LQI still carry environmental bias even after centering — differentials capture rapid hardware-specific micro-jitter instead.
+- **Differential-Only Features:** Slices to keep only `Diff_RSSI` and `Diff_LQI` (columns 2 & 3). Raw RSSI/LQI still carry environmental bias even after centering  - differentials capture rapid hardware-specific micro-jitter instead.
 
 **Models:**
 - **Heavy-Duty 1D CNN:** A 3-layer convolutional network (128→256→512 filters) with kernel sizes 11, 7, 3. Uses BatchNormalization, ReLU, MaxPooling, GlobalAveragePooling, and a Dense(512) + Dropout(0.5) head.
@@ -197,7 +197,7 @@ python3 6_scenario2_unseen_data.py
 
 ---
 
-## 🛠️ Requirements (Python)
+## Requirements (Python)
 Ensure you have the required libraries installed:
 ```bash
 pip install pyserial pandas numpy scikit-learn tensorflow matplotlib
